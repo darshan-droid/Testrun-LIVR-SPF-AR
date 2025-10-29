@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+  />
+  <title>WebAR Viewer</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: sans-serif;
+      color: #fff;
+      touch-action: none;
+    }
+
+    #enter-ar-btn {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 10px;
+      color: #fff;
+      backdrop-filter: blur(8px);
+      cursor: pointer;
+    }
+
+    #enter-ar-btn.hidden {
+      display: none;
+    }
+
+    #ui-label {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      font-size: 13px;
+      line-height: 1.4em;
+      color: #fff;
+      text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+    }
+
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui-label">Welcome to LIVR Singapore_AR</div>
+  <button id="enter-ar-btn">Enter AR</button>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
