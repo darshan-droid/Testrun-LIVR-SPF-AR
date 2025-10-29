@@ -11,6 +11,16 @@ let gltfRoot = null;
 let placedObject = null;
 let surfaceReady = false;
 
+function debugLog(msg) {
+    console.log(msg);
+
+    const box = document.getElementById('debugLog');
+    if (!box) return;
+
+    box.textContent += msg + "\n";
+    box.scrollTop = box.scrollHeight;
+}
+
 async function initAR() {
     console.log("[WebAR] initAR start");
 
