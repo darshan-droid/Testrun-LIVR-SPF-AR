@@ -1,23 +1,19 @@
 ﻿import * as THREE from './three.module.js';
 import { GLTFLoader } from './GLTFLoader.js';
+import { WebARButton } from './webxr-button.js';
 
-let renderer, scene, camera;
-let xrSession = null;
-let referenceSpace = null;
-let hitTestSource = null;
-
+let scene, camera, renderer;
 let reticle;
-let placedObject = null;
-let meta = null;
+let hitTestSource = null;
+let referenceSpace = null;
+
 let gltfRoot = null;
+let placedObject = null;
+let surfaceReady = false;
 
-const enterArBtn = document.getElementById('enter-ar-btn');
-const uiLabel = document.getElementById('ui-label');
+async function initAR() {
+    console.log("[WebAR] initAR start");
 
-init();
-
-async function init() {
-    // ----- THREE SETUP -----
     scene = new THREE.Scene();
 
     camera = new THREE.PerspectiveCamera(
@@ -28,189 +24,143 @@ async function init() {
     );
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setClearAlpha(0);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
     document.body.appendChild(renderer.domElement);
 
-    window.addEventListener('resize', onWindowResize, false);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x444466, 1.0);
+    scene.add(hemi);
 
-    // Reticle for placement
-    reticle = new THREE.Mesh(
-        new THREE.RingGeometry(0.08, 0.1, 32).rotateX(-Math.PI / 2),
-        new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0.8,
-        })
-    );
-    reticle.matrixAutoUpdate = false;
+    const ringGeo = new THREE.RingGeometry(0.07, 0.1, 32).rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        opacity: 0.9,
+        transparent: true,
+    });
+    reticle = new THREE.Mesh(ringGeo, ringMat);
     reticle.visible = false;
     scene.add(reticle);
 
-    // ----- LOAD METADATA + MODEL -----
-    meta = await loadMeta('./scene.meta.json');
-    gltfRoot = await loadGLB('./scene.glb');
+    const loader = new GLTFLoader();
+    loader.load(
+        './scene.glb',
+        (gltf) => {
+            console.log("[WebAR] GLB loaded");
+            gltfRoot = gltf.scene;
+            gltfRoot.visible = false;
+        },
+        undefined,
+        (err) => console.error("[WebAR] Error loading GLB:", err)
+    );
 
-    // Tap to place
-    document.body.addEventListener('click', onTapPlace);
+    window.addEventListener('touchend', onUserPlace, { passive: true });
+    window.addEventListener('click', onUserPlace);
 
-    // Setup AR button
-    if (navigator.xr) {
-        const isArSupported = await navigator.xr.isSessionSupported('immersive-ar');
-        if (isArSupported) {
-            enterArBtn.classList.remove('hidden');
-            enterArBtn.addEventListener('click', beginARSession);
-        } else {
-            enterArBtn.textContent = 'AR not supported';
+    // create the AR button
+    const xrButton = WebARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
+    document.body.appendChild(xrButton);
+
+    renderer.setAnimationLoop(render);
+}
+
+async function setupHitTestSource(session) {
+    console.log("[WebAR] setupHitTestSource called");
+
+    // Get a 'viewer' space first (almost always supported)
+    const viewerSpace = await session.requestReferenceSpace('viewer');
+
+    // Ask AR runtime for hit test source
+    hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
+    console.log("[WebAR] hitTestSource ready");
+
+    // Now try to get a stable world reference for placing content
+    try {
+        referenceSpace = await session.requestReferenceSpace('local-floor');
+        console.log("[WebAR] referenceSpace 'local-floor' ready");
+    } catch (err1) {
+        console.warn("[WebAR] 'local-floor' not supported, trying 'local'…", err1);
+        try {
+            referenceSpace = await session.requestReferenceSpace('local');
+            console.log("[WebAR] referenceSpace 'local' ready");
+        } catch (err2) {
+            console.warn("[WebAR] 'local' not supported, trying 'viewer' as fallback…", err2);
+            referenceSpace = await session.requestReferenceSpace('viewer');
+            console.log("[WebAR] referenceSpace 'viewer' fallback ready");
         }
-    } else {
-        enterArBtn.textContent = 'WebXR not available';
     }
 }
 
-async function beginARSession() {
-    if (!navigator.xr) {
-        alert("WebXR not supported in this browser");
+function render(timestamp, frame) {
+    const session = renderer.xr.getSession();
+    if (!session) {
+        renderer.render(scene, camera);
         return;
     }
 
-    try {
-        const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
-        if (!isSupported) {
-            alert("AR not supported on this device/browser");
-            return;
-        }
-
-        xrSession = await navigator.xr.requestSession('immersive-ar', {
-            requiredFeatures: ['hit-test'],
-            optionalFeatures: ['local-floor', 'bounded-floor'] // safer set
+    // Prevents repeated setup attempts
+    if (!hitTestSource && frame) {
+        console.log("[WebAR] render(): session detected, setting up hit test");
+        setupHitTestSource(session).catch(err => {
+            console.warn("[WebAR] setupHitTestSource failed:", err);
         });
-
-        renderer.xr.setReferenceSpaceType('local-floor');
-        await renderer.xr.setSession(xrSession);
-
-        try {
-            referenceSpace = await xrSession.requestReferenceSpace('local-floor');
-        } catch {
-            referenceSpace = await xrSession.requestReferenceSpace('local');
-        }
-
-        const viewerSpace = await xrSession.requestReferenceSpace('viewer');
-        hitTestSource = await xrSession.requestHitTestSource({ space: viewerSpace });
-
-        enterArBtn.classList.add('hidden');
-        uiLabel.textContent = "Tap to place Object";
-
-        renderer.setAnimationLoop(onXRFrame)
-        xrSession.addEventListener("end", () => {
-            enterArBtn.classList.remove("hidden");
-            uiLabel.textContent = "Session ended";
-        });
-
-        enterArBtn.classList.add('hidden');
-        uiLabel.textContent = "Tap to place object";
-
-        renderer.setAnimationLoop(onXRFrame);
-    } catch (err) {
-        console.error("Failed to start AR session:", err);
-        alert("Failed to start AR session:\n" + err.message);
     }
-}
-function onXRFrame(time, frame) {
-    if (!frame) return;
 
-    const pose = frame.getViewerPose(referenceSpace);
-    if (!pose) return;
+    if (frame && hitTestSource && referenceSpace) {
+        const hits = frame.getHitTestResults(hitTestSource);
 
-    const hitTestResults = frame.getHitTestResults(hitTestSource);
-    if (hitTestResults.length > 0) {
-        const hit = hitTestResults[0];
-        const hitPose = hit.getPose(referenceSpace);
+        if (hits.length > 0) {
+            const hit = hits[0].getPose(referenceSpace);
+            reticle.visible = true;
+            reticle.position.set(
+                hit.transform.position.x,
+                hit.transform.position.y,
+                hit.transform.position.z
+            );
 
-        reticle.visible = true;
-        reticle.matrix.fromArray(hitPose.transform.matrix);
-    } else {
-        reticle.visible = false;
+            if (gltfRoot && !gltfRoot.visible) {
+                gltfRoot.visible = true;
+                gltfRoot.position.copy(reticle.position);
+                gltfRoot.scale.set(1, 1, 1);
+                console.log("[WebAR] placed GLB at", reticle.position);
+            }
+        } else {
+            reticle.visible = false;
+        }
     }
 
     renderer.render(scene, camera);
 }
 
-function onTapPlace() {
-    if (!xrSession || !reticle.visible || !gltfRoot) return;
+function onUserPlace() {
+    console.log("[WebAR] onUserPlace fired");
 
-    if (!placedObject) {
-        placedObject = gltfRoot.clone(true);
-
-        // apply scale from meta
-        const objInfo = meta.Objects && meta.Objects[0] ? meta.Objects[0] : null;
-        if (objInfo && objInfo.InitialScale) {
-            const s = objInfo.InitialScale;
-            placedObject.scale.set(s[0], s[1], s[2]);
-        }
-
-        scene.add(placedObject);
+    if (!surfaceReady) {
+        console.warn("[WebAR] surfaceReady=false (no plane yet)");
+        return;
     }
-
-    const mat = new THREE.Matrix4();
-    mat.copy(reticle.matrix);
-    const pos = new THREE.Vector3();
-    const rot = new THREE.Quaternion();
-    const scl = new THREE.Vector3();
-    mat.decompose(pos, rot, scl);
-
-    placedObject.position.copy(pos);
-    placedObject.quaternion.copy(rot);
-}
-
-async function loadMeta(url) {
-    const res = await fetch(url);
-    return await res.json();
-}
-
-async function loadGLB(url) {
-    return new Promise((resolve, reject) => {
-        const loader = new GLTFLoader();
-        loader.load(
-            url,
-            (gltf) => resolve(gltf.scene),
-            undefined,
-            (err) => reject(err)
-        );
-    });
-}
-
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function OnPlaceOrMove() {
-    console.log("placeOrMove() fired");
-
     if (!gltfRoot) {
-        console.warn("No gltfRoot yet");
-        return;
-    }
-
-    if (!reticle || !reticle.visible) {
-        console.warn("No valid reticle hit");
+        console.warn("[WebAR] gltfRoot not loaded yet");
         return;
     }
 
     if (!placedObject) {
         placedObject = gltfRoot.clone(true);
-        placedObject.scale.set(1, 1, 1); // force visible size
+
+        // adjust this scale if invisible / huge
+        placedObject.scale.set(1, 1, 1);
+
         scene.add(placedObject);
-        console.log("Placed new object");
+        console.log("[WebAR] placed first object");
     } else {
-        console.log("Moving existing object");
+        console.log("[WebAR] moving existing object");
     }
 
     placedObject.position.copy(reticle.position);
     placedObject.quaternion.copy(reticle.quaternion);
-    placedObject.position.y += 0.05; // small lift to ensure it's not hidden in ground
+    placedObject.position.y += 0.02;
 
+    console.log("[WebAR] placedObject @", placedObject.position);
 }
+
+initAR();
