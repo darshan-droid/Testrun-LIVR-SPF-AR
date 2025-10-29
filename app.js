@@ -1,6 +1,6 @@
 ﻿import * as THREE from './three.module.js';
 import { GLTFLoader } from './GLTFLoader.js';
-import { WebARButton } from './webxr-button.js';
+import { WebXRButton } from './webxr-button.js';
 
 let scene, camera, renderer;
 let reticle;
@@ -28,6 +28,32 @@ async function initAR() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
     document.body.appendChild(renderer.domElement);
+
+    const arButton = document.createElement('button');
+    arButton.className = 'webar-button';
+    arButton.textContent = 'Enter AR';
+
+    arButton.addEventListener('click', async () => {
+        debugLog("[WebARButton] Requesting AR session...");
+
+        try {
+            const session = await navigator.xr.requestSession('immersive-ar', {
+                requiredFeatures: ['hit-test']
+            });
+
+            debugLog("[WebARButton] AR session started ✅");
+
+            renderer.xr.setSession(session);
+
+            // hide button when session active
+            arButton.style.display = 'none';
+        } catch (err) {
+            console.error(err);
+            debugLog("[WebARButton] Failed to start session: " + err.message);
+        }
+    });
+
+    document.body.appendChild(arButton);
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x444466, 1.0);
     scene.add(hemi);
@@ -58,8 +84,8 @@ async function initAR() {
     window.addEventListener('click', onUserPlace);
 
     // create the AR button
-    const xrButton = WebARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
-    document.body.appendChild(xrButton);
+    //const xrButton = WebARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
+    //document.body.appendChild(xrButton);
 
     renderer.setAnimationLoop(render);
 }

@@ -515,49 +515,6 @@ export class WebXRButton {
   }
 }
 
-export class WebARButton {
-    static createButton(renderer, options = {}) {
-        const button = document.createElement('button');
-        button.textContent = 'ENTER AR';
-        Object.assign(button.style, {
-            position: 'absolute',
-            bottom: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            padding: '12px 24px',
-            borderRadius: '10px',
-            border: 'none',
-            background: '#0078ff',
-            color: '#fff',
-            font: '600 15px system-ui, sans-serif',
-            cursor: 'pointer'
-        });
-
-        if (!('xr' in navigator)) {
-            button.textContent = 'WEBXR NOT SUPPORTED';
-            button.style.background = '#666';
-            console.error('[WebXRButton] navigator.xr not found.');
-            return button;
-        }
-
-        button.addEventListener('click', async () => {
-            console.log('[WebXRButton] Requesting AR session...');
-            try {
-                const session = await navigator.xr.requestSession('immersive-ar', {
-                    requiredFeatures: options.requiredFeatures || ['hit-test']
-                });
-                console.log('[WebXRButton] AR session started ');
-                renderer.xr.setSession(session);
-                button.style.display = 'none';
-            } catch (err) {
-                console.error('[WebXRButton] requestSession failed:', err);
-            }
-        });
-
-        return button;
-    }
-}
-
 
 /**
  * Function checking if a specific css class exists as child of element.
