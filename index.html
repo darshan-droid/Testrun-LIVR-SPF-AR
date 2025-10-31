@@ -15,18 +15,20 @@
         <canvas id="unity-canvas" style="width: 100%; height: 100%;"></canvas>
       </div>
       <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
+        <div>
+          <img src="Assets/powered_livr.png" width="150" height="100">
+        </div>
         <div id="unity-progress-bar-empty">
           <div id="unity-progress-bar-full"></div>
         </div>
       </div>
-      <div id="unity-footer">
+      <!-- <div id="unity-footer">
         <div id="unity-webgl-logo"></div>
         <button id="entervr" value="Enter VR" disabled>VR</button>
         <button id="enterar" value="Enter AR" disabled>AR</button>
         <div id="unity-webxr-link">Using <a href="https://github.com/De-Panther/unity-webxr-export" target="_blank" title="WebXR Export">WebXR Export</a></div>
         <div id="unity-build-title">Singapore_AR</div>
-      </div>
+      </div> -->
     </div>
     <script>
       var buildUrl = "Build";
@@ -60,6 +62,7 @@
         }).then((instance) => {
           unityInstance = instance;
           loadingBar.style.display = "none";
+          unityInstance.Module.WebXR.toggleAR();
           if (fullscreenButton)
           {
             fullscreenButton.onclick = () => {
