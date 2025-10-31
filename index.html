@@ -62,7 +62,11 @@
         }).then((instance) => {
           unityInstance = instance;
           loadingBar.style.display = "none";
-          unityInstance.Module.WebXR.toggleAR();
+          if (unityInstance.Module.WebXR) {
+            unityInstance.Module.WebXR.toggleAR();
+          } else {
+            console.warn("WebXR not available yet");
+          }
           if (fullscreenButton)
           {
             fullscreenButton.onclick = () => {
